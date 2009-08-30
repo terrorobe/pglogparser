@@ -1,0 +1,7 @@
+Aug 31 02:16:13 pgtest postgres[1992]: [2-1] 2009-08-31 02:16:13 CEST LOG:  duration: 7.298 ms  statement: SELECT d.datname as "Name",
+Aug 31 02:16:13 pgtest postgres[1992]: [2-2] #011       pg_catalog.pg_get_userbyid(d.datdba) as "Owner",
+Aug 31 02:16:13 pgtest postgres[1992]: [2-3] #011       pg_catalog.pg_encoding_to_char(d.encoding) as "Encoding",
+Aug 31 02:16:13 pgtest postgres[1992]: [2-4] #011       d.datcollate as "Collation",
+Aug 31 02:16:13 pgtest postgres[1992]: [2-5] #011       d.datctype as "Ctype",
+Aug 31 02:16:13 pgtest postgres[1992]: [2-6] #011       pg_catalog.array_to_string(d.datacl, E'\n') AS "Access privileges"
+
