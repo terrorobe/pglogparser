@@ -13,25 +13,25 @@ my $pglogdurationre = qr!
 
 my $threshold = 10;
 
-my $backend = 0;
+my $backend    = 0;
 my $linenumber = 0;
-my $printme = 0;
+my $printme    = 0;
 
-while (my $line = <STDIN>) {
+while ( my $line = <STDIN> ) {
 
-    if ($line =~ m/$pglogchunkre/) {
+    if ( $line =~ m/$pglogchunkre/ ) {
 
-        my ($curbackend, $curlinenumber, $content) = ($1, $2, $3);
+        my ( $curbackend, $curlinenumber, $content ) = ( $1, $2, $3 );
 
-        if ($curlinenumber == 1) {
-            if ($content =~ m/$pglogdurationre/) {
-                if ($1 > $threshold) {
+        if ( $curlinenumber == 1 ) {
+            if ( $content =~ m/$pglogdurationre/ ) {
+                if ( $1 > $threshold ) {
                     $backend = $curbackend;
                     $printme = 1;
                 }
             }
         }
-        elsif ($curbackend == $backend) {
+        elsif ( $curbackend == $backend ) {
             $printme = 1;
         }
     }
