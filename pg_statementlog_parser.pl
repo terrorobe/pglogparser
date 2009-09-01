@@ -3,9 +3,15 @@
 use strict;
 use warnings;
 
-# Fixme: Logchunks can be logged out of order. Add support for this.
+$|++;
 
-my $pglogchunkre = qr!\[(\d+)-(\d+)\]\s(.*)!x;
+use Carp;
+use Data::Dumper;
+
+my $pglogchunkre = qr!
+                \[(\d+)]:\s+              # Backend PID
+                \[(\d+)-(\d+)\]\s       # Logline and Chunk Counter
+                (.*)!x;                 # Log Message
 
 my $pglogdurationre = qr!
                 (.*?)\s+                # Timestamp
@@ -16,61 +22,90 @@ my $pglogdurationre = qr!
 
 my $threshold = 300000; # msec
 
+my @chunkbuffer;
 my $backend    = 0;
 my $linenumber = 0;
 my $statementbuf = '';
 my $timestamp = '';
 my $duration = 0;
 
+
+my $LINENUMBER = 0;
+my $STATEMENT = 1;
+
+my $linecounter = 0;
+
+my $eins = 1;
+
 while ( my $line = <ARGV> ) {
+    $linecounter++;
+    next if $line =~ /^\s+$/;
+
+#    print "$linecounter\n";
 
     if ( $line =~ m/$pglogchunkre/ ) {
 
-        my ( $curbackend, $curlinenumber, $content ) = ( $1, $2, $3, );
+        my ( $curbackendpid, $curlinenumber, $foobar, $content ) = ( $1, $2, $3, $4 );
 
-# If this is the first line number of a chunk and it contains a duration
-# above the threshold then log it
+        print "$curbackendpid, $curlinenumber, $foobar\n";
 
-        if ( $curlinenumber == 1 ) {
+# If this is the first chunk of a log line we might need to flush a
+# previously stored log line
 
-            if ($statementbuf) {
-                logme($timestamp, $duration, $statementbuf);
-                $statementbuf = '';
+        my $bla = $foobar;
+        print "Cur Chunk Number: $bla\n";
+        print Dumper $bla;
+        if ( $bla == 1 ) {
+
+            if ($chunkbuffer[$curbackendpid]->[$STATEMENT]) {
+                logme($timestamp, $duration, $curbackendpid);
+                $chunkbuffer[$curbackendpid]->[$STATEMENT] = '';
             }
+
+# Extract timestamp, duration and log statement
 
             if ( $content =~ m/$pglogdurationre/ ) {
                 my ( $statementpart );
                 ( $timestamp, $duration, $statementpart ) = ( $1, $2, $3 );
 
+
+# If this statement is of interest, save the statement and log number since
+# there might be other chunks belonging to this statement
+
                 if ( $duration > $threshold ) {
-                    $backend = $curbackend;
-                    $statementbuf = $statementpart;
+                    $chunkbuffer[$curbackendpid]->[$LINENUMBER] = $curlinenumber;
+                    $chunkbuffer[$curbackendpid]->[$STATEMENT] = $statementpart;
                 }
+            }
+            else {
+                croak "This doesn't look like something I expect in a statement log line";
             }
         }
 
-# If the backend number hasn't been changed, this needs to get printed
-        elsif ( $curbackend == $backend ) {
-            $statementbuf .= $content;
-        }
 
-# If it's neither a starting or a continuous line, reset backend for good
-        else {
-            $backend = -1;
+# This logchunk belongs to a log line we want to log
+
+        elsif ( $chunkbuffer[$curbackendpid]->[$LINENUMBER] == $curlinenumber ) {
+            $chunkbuffer[$curbackendpid]->[$STATEMENT] .= $content;
         }
+    }
+    else {
+        croak "This doesn't look like something I expect in a statement log\nStatement\n\n$line";
     }
 }
 
 
-if ($statementbuf) {
-    logme($timestamp, $duration, $statementbuf);
-}
+# FIXME: Flush chunkbuffer
+#if ($statementbuf) {
+#    logme($timestamp, $duration, $statementbuf);
+#}
 
 
 sub logme {
-    my ($timestamp, $duration, $statementbuf) = @_;
+    my ($timestamp, $duration, $curbackendpid) = @_;
 
-    $statementbuf =~ s/\s+/ /g;
+    my $statement = $chunkbuffer[$curbackendpid]->[$STATEMENT];
+    $statement =~ s/\s+/ /g;
 
-    print "$timestamp: $duration ms: $statementbuf\n";
+    print "$timestamp: $duration ms: $statement\n";
 }
