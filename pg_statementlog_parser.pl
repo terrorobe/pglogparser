@@ -3,6 +3,8 @@
 use strict;
 use warnings;
 
+# Fixme: Logchunks can be logged out of order. Add support for this.
+
 my $pglogchunkre = qr!\[(\d+)-(\d+)\]\s(.*)!x;
 
 my $pglogdurationre = qr!
