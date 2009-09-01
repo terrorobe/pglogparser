@@ -3,10 +3,15 @@
 use strict;
 use warnings;
 
-$|++;
-
 use Carp;
-use Data::Dumper;
+
+use constant {
+    LINENUMBER => 0,
+    STATEMENT => 1,
+    TIMESTAMP => 2,
+    DURATION => 3,
+};
+
 
 my $pglogchunkre = qr!
                 \[(\d+)]:\s+              # Backend PID
@@ -20,22 +25,14 @@ my $pglogdurationre = qr!
                 statement:\s+(.*)       # Statement
                 !x;
 
-my $threshold = 300000; # msec
+my $threshold = 300 * 10**3; # msec
 my $debug = 0;
 
 my @chunkbuffer;
 
 
-my $LINENUMBER = 0;
-my $STATEMENT = 1;
-my $TIMESTAMP = 2;
-my $DURATION = 3;
-
-my $linecounter = 0;
-
-
 while ( my $line = <ARGV> ) {
-    $linecounter++;
+
     next if $line =~ /^\s+$/;
 
     if ( $line =~ m/$pglogchunkre/ ) {
@@ -48,9 +45,9 @@ while ( my $line = <ARGV> ) {
 
         if ( $curchunknumber == 1 ) {
 
-            if ($chunkbuffer[$curbackendpid]->[$STATEMENT]) {
+            if ($chunkbuffer[$curbackendpid]->[STATEMENT]) {
                 logme($curbackendpid);
-                $chunkbuffer[$curbackendpid]->[$STATEMENT] = '';
+                $chunkbuffer[$curbackendpid]->[STATEMENT] = '';
             }
 
 # Extract timestamp, duration and log statement
@@ -59,14 +56,14 @@ while ( my $line = <ARGV> ) {
                 my ( $timestamp, $duration, $statementpart ) = ( $1, $2, $3 );
 
 
-# If this statement is of interest, save the statement and log number since
+# If this statement is of interest, save it's data for now since
 # there might be other chunks belonging to this statement
 
                 if ( $duration > $threshold ) {
-                    $chunkbuffer[$curbackendpid]->[$LINENUMBER] = $curlinenumber;
-                    $chunkbuffer[$curbackendpid]->[$STATEMENT] = $statementpart;
-                    $chunkbuffer[$curbackendpid]->[$TIMESTAMP] = $timestamp;
-                    $chunkbuffer[$curbackendpid]->[$DURATION] = $duration;
+                    $chunkbuffer[$curbackendpid]->[LINENUMBER] = $curlinenumber;
+                    $chunkbuffer[$curbackendpid]->[STATEMENT] = $statementpart;
+                    $chunkbuffer[$curbackendpid]->[TIMESTAMP] = $timestamp;
+                    $chunkbuffer[$curbackendpid]->[DURATION] = $duration;
                 }
             }
             else {
@@ -79,8 +76,8 @@ while ( my $line = <ARGV> ) {
 
 # This logchunk belongs to a log line we want to log
 
-        elsif ( $chunkbuffer[$curbackendpid]->[$LINENUMBER] && $chunkbuffer[$curbackendpid]->[$LINENUMBER] == $curlinenumber ) {
-            $chunkbuffer[$curbackendpid]->[$STATEMENT] .= $content;
+        elsif ( $chunkbuffer[$curbackendpid]->[LINENUMBER] && $chunkbuffer[$curbackendpid]->[LINENUMBER] == $curlinenumber ) {
+            $chunkbuffer[$curbackendpid]->[STATEMENT] .= $content;
         }
     }
     else {
@@ -89,18 +86,19 @@ while ( my $line = <ARGV> ) {
 }
 
 
-# FIXME: Flush chunkbuffer
-#if ($statementbuf) {
-#    logme($timestamp, $duration, $statementbuf);
-#}
-
+# Auauauauaua
+for my $backendpid (0 .. @chunkbuffer) {
+    if ($chunkbuffer[$backendpid]->[STATEMENT]) {
+        logme($backendpid);
+    }
+}
 
 sub logme {
     my ($curbackendpid) = @_;
 
-    my $statement = $chunkbuffer[$curbackendpid]->[$STATEMENT];
-    my $timestamp = $chunkbuffer[$curbackendpid]->[$TIMESTAMP];
-    my $duration = $chunkbuffer[$curbackendpid]->[$DURATION];
+    my $statement = $chunkbuffer[$curbackendpid]->[STATEMENT];
+    my $timestamp = $chunkbuffer[$curbackendpid]->[TIMESTAMP];
+    my $duration = $chunkbuffer[$curbackendpid]->[DURATION];
 
     $statement =~ s/\s+/ /g;
 
