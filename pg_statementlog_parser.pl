@@ -25,7 +25,7 @@ my $pglogdurationre = qr!
                 !x;
 
 my $threshold = 300 * 10**3;    # msec
-my $debug     = 0;
+my $debug     = 1;
 
 my @chunkbuffer;
 
@@ -33,21 +33,24 @@ while ( my $line = <ARGV> ) {
 
     next if $line =~ /^\s+$/;
 
+    # Does he look like a PostreSQL log line?!
+
     if ( $line =~ m/$pglogchunkre/ ) {
 
         my ( $curbackendpid, $curlinenumber, $curchunknumber, $content )
             = ( $1, $2, $3, $4 );
 
-        # If this is the first chunk of a log line we might need to flush a
-        # previously stored log line
-
         if ( $curchunknumber == 1 ) {
+
+            # If this is the first chunk of a log line we might need to flush a
+            # previously stored log line
 
             if ( $chunkbuffer[$curbackendpid]->[STATEMENT] ) {
                 logme($curbackendpid);
                 $chunkbuffer[$curbackendpid]->[STATEMENT] = '';
             }
 
+            # Does he look like a statement log entry?!
             # Extract timestamp, duration and log statement
 
             if ( $content =~ m/$pglogdurationre/ ) {
@@ -67,12 +70,13 @@ while ( my $line = <ARGV> ) {
             }
             else {
                 if ($debug) {
-                    carp "Skipping unknown entry:\n\n$content";
+                    carp "Skipping unknown entry:\n$content";
                 }
             }
         }
 
-        # This logchunk belongs to a log line we want to log
+        # So we're not the first line of a chunk...
+        # Does this logchunk belong to a log line we want to log?
 
         elsif ($chunkbuffer[$curbackendpid]->[LINENUMBER]
             && $chunkbuffer[$curbackendpid]->[LINENUMBER] == $curlinenumber )
@@ -86,7 +90,7 @@ while ( my $line = <ARGV> ) {
     }
 }
 
-# Auauauauaua
+# Flush any leftover statements from the chunk buffer
 for my $backendpid ( 0 .. @chunkbuffer ) {
     if ( $chunkbuffer[$backendpid]->[STATEMENT] ) {
         logme($backendpid);
