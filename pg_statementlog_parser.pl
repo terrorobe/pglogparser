@@ -12,7 +12,7 @@ my $pglogdurationre = qr!
                 statement:\s+(.*)       # Statement
                 !x;
 
-my $threshold = 1000; # msec
+my $threshold = 300000; # msec
 
 my $backend    = 0;
 my $linenumber = 0;
@@ -32,7 +32,7 @@ while ( my $line = <ARGV> ) {
         if ( $curlinenumber == 1 ) {
 
             if ($statementbuf) {
-                print "$timestamp: $duration ms: $statementbuf\n";
+                logme($timestamp, $duration, $statementbuf);
                 $statementbuf = '';
             }
 
@@ -61,5 +61,14 @@ while ( my $line = <ARGV> ) {
 
 
 if ($statementbuf) {
+    logme($timestamp, $duration, $statementbuf);
+}
+
+
+sub logme {
+    my ($timestamp, $duration, $statementbuf) = @_;
+
+    $statementbuf =~ s/\s+/ /g;
+
     print "$timestamp: $duration ms: $statementbuf\n";
 }
