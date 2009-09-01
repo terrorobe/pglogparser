@@ -7,16 +7,15 @@ use Carp;
 
 use constant {
     LINENUMBER => 0,
-    STATEMENT => 1,
-    TIMESTAMP => 2,
-    DURATION => 3,
+    STATEMENT  => 1,
+    TIMESTAMP  => 2,
+    DURATION   => 3,
 };
-
 
 my $pglogchunkre = qr!
                 \[(\d+)]:\s+              # Backend PID
                 \[(\d+)-(\d+)\]\s       # Logline and Chunk Counter
-                (.*)!x;                 # Log Message
+                (.*)!x;    # Log Message
 
 my $pglogdurationre = qr!
                 (.*?)\s+                # Timestamp
@@ -25,11 +24,10 @@ my $pglogdurationre = qr!
                 statement:\s+(.*)       # Statement
                 !x;
 
-my $threshold = 300 * 10**3; # msec
-my $debug = 0;
+my $threshold = 300 * 10**3;    # msec
+my $debug     = 0;
 
 my @chunkbuffer;
-
 
 while ( my $line = <ARGV> ) {
 
@@ -37,33 +35,34 @@ while ( my $line = <ARGV> ) {
 
     if ( $line =~ m/$pglogchunkre/ ) {
 
-        my ( $curbackendpid, $curlinenumber, $curchunknumber, $content ) = ( $1, $2, $3, $4 );
+        my ( $curbackendpid, $curlinenumber, $curchunknumber, $content )
+            = ( $1, $2, $3, $4 );
 
-
-# If this is the first chunk of a log line we might need to flush a
-# previously stored log line
+        # If this is the first chunk of a log line we might need to flush a
+        # previously stored log line
 
         if ( $curchunknumber == 1 ) {
 
-            if ($chunkbuffer[$curbackendpid]->[STATEMENT]) {
+            if ( $chunkbuffer[$curbackendpid]->[STATEMENT] ) {
                 logme($curbackendpid);
                 $chunkbuffer[$curbackendpid]->[STATEMENT] = '';
             }
 
-# Extract timestamp, duration and log statement
+            # Extract timestamp, duration and log statement
 
             if ( $content =~ m/$pglogdurationre/ ) {
                 my ( $timestamp, $duration, $statementpart ) = ( $1, $2, $3 );
 
-
-# If this statement is of interest, save it's data for now since
-# there might be other chunks belonging to this statement
+              # If this statement is of interest, save it's data for now since
+              # there might be other chunks belonging to this statement
 
                 if ( $duration > $threshold ) {
-                    $chunkbuffer[$curbackendpid]->[LINENUMBER] = $curlinenumber;
-                    $chunkbuffer[$curbackendpid]->[STATEMENT] = $statementpart;
+                    $chunkbuffer[$curbackendpid]->[LINENUMBER]
+                        = $curlinenumber;
+                    $chunkbuffer[$curbackendpid]->[STATEMENT]
+                        = $statementpart;
                     $chunkbuffer[$curbackendpid]->[TIMESTAMP] = $timestamp;
-                    $chunkbuffer[$curbackendpid]->[DURATION] = $duration;
+                    $chunkbuffer[$curbackendpid]->[DURATION]  = $duration;
                 }
             }
             else {
@@ -73,22 +72,23 @@ while ( my $line = <ARGV> ) {
             }
         }
 
+        # This logchunk belongs to a log line we want to log
 
-# This logchunk belongs to a log line we want to log
-
-        elsif ( $chunkbuffer[$curbackendpid]->[LINENUMBER] && $chunkbuffer[$curbackendpid]->[LINENUMBER] == $curlinenumber ) {
+        elsif ($chunkbuffer[$curbackendpid]->[LINENUMBER]
+            && $chunkbuffer[$curbackendpid]->[LINENUMBER] == $curlinenumber )
+        {
             $chunkbuffer[$curbackendpid]->[STATEMENT] .= $content;
         }
     }
     else {
-        croak "This doesn't look like something I expect in a statement log\nLine\n\n$line";
+        croak
+            "This doesn't look like something I expect in a statement log\nLine\n\n$line";
     }
 }
 
-
 # Auauauauaua
-for my $backendpid (0 .. @chunkbuffer) {
-    if ($chunkbuffer[$backendpid]->[STATEMENT]) {
+for my $backendpid ( 0 .. @chunkbuffer ) {
+    if ( $chunkbuffer[$backendpid]->[STATEMENT] ) {
         logme($backendpid);
     }
 }
@@ -98,7 +98,7 @@ sub logme {
 
     my $statement = $chunkbuffer[$curbackendpid]->[STATEMENT];
     my $timestamp = $chunkbuffer[$curbackendpid]->[TIMESTAMP];
-    my $duration = $chunkbuffer[$curbackendpid]->[DURATION];
+    my $duration  = $chunkbuffer[$curbackendpid]->[DURATION];
 
     $statement =~ s/\s+/ /g;
 
